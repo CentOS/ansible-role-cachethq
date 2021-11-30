@@ -1,0 +1,33 @@
+<VirtualHost *:443>
+ ServerAdmin webmaster@centos.org
+ ServerName {{ cachethq_httpd_hostname }}
+ DocumentRoot /var/www/html
+
+ Header always set Strict-Transport-Security "max-age=31536000"
+
+<Location "/">
+ ProxyPass "http://localhost:{{ cachethq_container_port }}/"
+ ProxyPassReverse "http://localhost:{{ cachethq_container_port }}/"
+</Location>
+
+ErrorLog logs/{{ cachethq_httpd_hostname }}_error.log
+TransferLog logs/{{ cachethq_httpd_hostname }}_access.log
+LogLevel warn
+SSLEngine on
+{{ httpd_tls_ciphers }}
+SSLCertificateFile /etc/pki/tls/certs/{{ cachethq_httpd_hostname }}.crt
+SSLCertificateKeyFile /etc/pki/tls/private/{{ cachethq_httpd_hostname }}.key
+SSLCertificateChainFile /etc/pki/tls/certs/{{ cachethq_httpd_hostname }}-CAChain.crt
+<Files ~ "\.(cgi|shtml|phtml|php3?)$">
+    SSLOptions +StdEnvVars
+</Files>
+<Directory "/var/www/cgi-bin">
+    SSLOptions +StdEnvVars
+</Directory>
+SetEnvIf User-Agent ".*MSIE.*" \
+         nokeepalive ssl-unclean-shutdown \
+         downgrade-1.0 force-response-1.0
+CustomLog logs/ssl-{{ cachethq_httpd_hostname }}_request.log \
+          "%t %h %{SSL_PROTOCOL}x %{SSL_CIPHER}x \"%r\" %b"
+</VirtualHost>   
+

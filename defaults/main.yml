@@ -1,1 +1,16 @@
 # Defaults variables for role cachethq
+#
+# This role will just deploy CachetHQ (cachethq.io) from container and so will use podman
+
+# cachethq app settings
+# Unpriv user to launch the cachethq app
+cachethq_user: cachet
+# tag to fetch for container/docker and use with podman
+cachethq_container_url: quay.io/farrotin/cachethq # not using original one due to missing TLS https://github.com/CachetHQ/Cachet/pull/4293
+cachethq_version: latest
+cachethq_app_key: base64:MjjoRKENTIlKFu2bVlczaLwL16FvpxJ7OTPJF9NbRBE= # generate random and override with group/host_vars first with 'echo "base64:$(openssl rand -base64 32)"'
+cachethq_container_port: 8000
+
+# httpd settings
+# TLS cert to deploy
+cachethq_httpd_hostname: status.stg.centos.org

@@ -1,1 +1,91 @@
 # Defaults tasks for role cachethq
+
+- name: Configuring httpd
+  import_role:
+    name: httpd
+  vars:
+    httpd_tls: True
+
+- import_role:
+    name: httpd
+    tasks_from: pki-tls
+  vars:
+    pki_hostname: "{{ cachethq_httpd_hostname }}"
+  notify:
+    - restart_httpd
+  tags:
+    - tls
+
+- name: Enabling needed selinux booleans
+  seboolean:
+    name: "{{ item }}"
+    persistent: yes
+    state: on
+  with_items:
+    - httpd_can_network_connect
+
+- name: Configuring httpd vhost for cachethq role
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/httpd/conf.d/{{ item }}"
+    mode: 0644
+  with_items:
+    - 10_cachethq_vhost.conf
+    - ssl-cachethq_vhost.conf
+  notify:
+    - restart_httpd
+
+- name: User {{ cachethq_user }} launching cachethq app
+  user:
+    name: "{{ cachethq_user }}"
+    state: present
+    shell: /bin/bash
+    comment: "{{ cachethq_user }} CachetHQ app service user" 
+  tags:
+    - users
+
+- name: Directory for CachetHQ app
+  file:
+    path: "/home/{{ cachethq_user }}/cachethq"
+    owner: "{{ cachethq_user }}"
+    group: "{{ cachethq_user }}"
+    state: directory
+    mode: 0770
+  tags:
+    - files
+
+- name: Ensuring we have sqlite db for cachethq
+  file:
+    path: "/home/{{ cachethq_user }}/cachethq/database.sqlite"
+    owner: "{{ cachethq_user }}"
+    group: "{{ cachethq_user }}"
+    state: touch
+    mode: '0664'
+  tags:
+    - files
+
+- import_role:
+    name: podman-host
+  vars:
+    - podman_rootless_users:
+        - "{{ cachethq_user }}"
+
+- import_role:
+    name: podman-host
+    tasks_from: rootless-container.yml
+  vars:
+    podman_rootless_containers:
+      - name: cachethq
+        image: "{{ cachethq_container_url }}:{{ cachethq_version }}"
+        podman_args: "-e FORCE_HTTPS_URLS=true -e TRUSTED_PROXIES=* -e APP_DEBUG=false -e APP_URL=https://{{ cachethq_httpd_hostname }} -e DB_DRIVER=sqlite -e CACHE_DRIVER=database -e SESSION_DRIVER=database -e QUEUE_DRIVER=sync -e APP_KEY={{ cachethq_app_key }} -p {{ cachethq_container_port }}:8000 -v /home/{{ cachethq_user }}/cachethq/database.sqlite:/var/www/html/database/database.sqlite:Z"
+        user: "{{ cachethq_user }}"
+
+
+- name: Ensuring backup user and jobs
+  include_role:
+    name: centos-backup
+    tasks_from: client
+  vars:
+    - centos_role: cachethq
+    - role_backup_folders:
+        - "/home/{{ cachethq_user }}/cachethq"
